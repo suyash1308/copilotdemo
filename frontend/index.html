@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WildLife Auth - Advanced Authentication System</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.4.0/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app" :class="{ 'dark-mode': isDarkMode }">
+        <!-- Theme Toggle -->
+        <div class="theme-toggle">
+            <button @click="toggleTheme" :class="['theme-btn', isDarkMode ? 'dark' : 'light']">
+                {{ isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode' }}
+            </button>
+        </div>
+
+        <div class="container">
+            <!-- Dashboard Page -->
+            <div v-show="currentPage === 'dashboard'" class="dashboard-wrapper">
+                <!-- Header with Navigation -->
+                <div class="dashboard-header">
+                    <div class="header-left">
+                        <div class="logo">🦁 WildLife Auth</div>
+                        <h1>Welcome, {{ currentUser?.first_name }}!</h1>
+                        <p>Explore the beauty of wildlife photography</p>
+                    </div>
+                    <div class="header-right">
+                        <button @click="currentPage = 'profile'" class="btn btn-secondary">👤 Profile</button>
+                        <button @click="currentPage = 'wildlife-manage'" class="btn btn-secondary">🦁 Manage Animals</button>
+                        <button @click="handleLogout" class="btn btn-logout">Logout</button>
+                    </div>
+                </div>
+
+                <!-- Statistics Section -->
+                <div class="stats-section">
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-content">
+                            <div class="stat-value">{{ totalUsers }}</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📸</div>
+                        <div class="stat-content">
+                            <div class="stat-value">{{ wildlifeAnimals.length }}</div>
+                            <div class="stat-label">Animals</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⭐</div>
+                        <div class="stat-content">
+                            <div class="stat-value">{{ favoriteCount }}</div>
+                            <div class="stat-label">Favorites</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search and Filter -->
+                <div class="gallery-controls">
+                    <div class="search-box">
+                        <input
+                            v-model="searchQuery"
+                            type="text"
+                            placeholder="🔍 Search wildlife..."
+                            class="search-input"
+                        />
+                    </div>
+                    <div class="filter-buttons">
+                        <button
+                            @click="filterCategory = null"
+                            :class="{ 'active': filterCategory === null }"
+                            class="filter-btn"
+                        >
+                            All
+                        </button>
+                        <button
+                            @click="filterCategory = 'Big Cats'"
+                            :class="{ 'active': filterCategory === 'Big Cats' }"
+                            class="filter-btn"
+                        >
+                            Big Cats
+                        </button>
+                        <button
+                            @click="filterCategory = 'Birds'"
+                            :class="{ 'active': filterCategory === 'Birds' }"
+                            class="filter-btn"
+                        >
+                            Birds
+                        </button>
+                        <button
+                            @click="filterCategory = 'Mammals'"
+                            :class="{ 'active': filterCategory === 'Mammals' }"
+                            class="filter-btn"
+                        >
+                            Mammals
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gallery -->
+                <div class="gallery-container">
+                    <h2>Wildlife Photography Gallery</h2>
+                    <div class="photos-grid">
+                        <div
+                            v-for="animal in filteredAnimals"
+                            :key="animal.id"
+                            class="photo-card"
+                            @click="showAnimalDetails(animal)"
+                        >
+                            <div class="photo-image" :class="animal.class"></div>
+                            <div class="photo-overlay">
+                                <button
+                                    @click.stop="toggleFavorite(animal.id)"
+                                    :class="{ 'favorited': isFavorited(animal.id) }"
+                                    class="favorite-btn"
+                                >
+                                    {{ isFavorited(animal.id) ? '❤️' : '🤍' }}
+                                </button>
+                            </div>
+                            <div class="photo-info">
+                                <h3>{{ animal.name }}</h3>
+                                <p>{{ animal.description }}</p>
+                                <div class="animal-category">{{ animal.category }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Animal Details Modal -->
+                <div v-if="selectedAnimal" class="modal" @click="selectedAnimal = null">
+                    <div class="modal-content" @click.stop>
+                        <button @click="selectedAnimal = null" class="modal-close">✕</button>
+                        <div class="modal-image" :class="selectedAnimal.class"></div>
+                        <div class="modal-body">
+                            <h2>{{ selectedAnimal.name }}</h2>
+                            <p class="modal-description">{{ selectedAnimal.description }}</p>
+                            <div class="animal-facts">
+                                <h3>Fun Facts</h3>
+                                <ul>
+                                    <li v-for="fact in selectedAnimal.facts" :key="fact">{{ fact }}</li>
+                                </ul>
+                            </div>
+                            <div class="modal-footer">
+                                <button @click="selectedAnimal = null" class="btn btn-secondary">Close</button>
+                                <button
+                                    @click="toggleFavorite(selectedAnimal.id)"
+                                    :class="{ 'favorited': isFavorited(selectedAnimal.id) }"
+                                    class="btn btn-primary"
+                                >
+                                    {{ isFavorited(selectedAnimal.id) ? '❤️ Favorited' : '🤍 Add to Favorites' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Page -->
+            <div v-show="currentPage === 'profile'" class="profile-wrapper">
+                <div class="profile-header">
+                    <button @click="currentPage = 'dashboard'" class="btn btn-secondary">← Back to Dashboard</button>
+                    <h1>User Profile</h1>
+                </div>
+
+                <div class="profile-container">
+                    <div class="profile-tabs">
+                        <button
+                            @click="profileTab = 'info'"
+                            :class="{ 'active': profileTab === 'info' }"
+                            class="tab-btn"
+                        >
+                            👤 Personal Info
+                        </button>
+                        <button
+                            @click="profileTab = 'security'"
+                            :class="{ 'active': profileTab === 'security' }"
+                            class="tab-btn"
+                        >
+                            🔐 Security
+                        </button>
+                        <button
+                            @click="profileTab = 'favorites'"
+                            :class="{ 'active': profileTab === 'favorites' }"
+                            class="tab-btn"
+                        >
+                            ⭐ Favorites
+                        </button>
+                    </div>
+
+                    <!-- Personal Info Tab -->
+                    <div v-show="profileTab === 'info'" class="tab-content">
+                        <form @submit.prevent="updateProfile" class="profile-form">
+                            <div v-if="profileSuccess" class="alert alert-success">
+                                <span class="alert-icon">✓</span>
+                                {{ profileSuccess }}
+                            </div>
+                            <div v-if="profileError" class="alert alert-error">
+                                <span class="alert-icon">✕</span>
+                                {{ profileError }}
+                            </div>
+
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" :value="currentUser?.username" disabled class="input-disabled" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" :value="currentUser?.email" disabled class="input-disabled" />
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>First Name</label>
+                                    <input
+                                        v-model="profileForm.first_name"
+                                        type="text"
+                                        placeholder="Enter first name"
+                                        class="form-input"
+                                    />
+                                </div>
+                                <div class="form-group">
+                                    <label>Last Name</label>
+                                    <input
+                                        v-model="profileForm.last_name"
+                                        type="text"
+                                        placeholder="Enter last name"
+                                        class="form-input"
+                                    />
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" :disabled="isUpdatingProfile">
+                                {{ isUpdatingProfile ? 'Updating...' : 'Save Changes' }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Security Tab -->
+                    <div v-show="profileTab === 'security'" class="tab-content">
+                        <form @submit.prevent="changePassword" class="profile-form">
+                            <div v-if="securitySuccess" class="alert alert-success">
+                                <span class="alert-icon">✓</span>
+                                {{ securitySuccess }}
+                            </div>
+                            <div v-if="securityError" class="alert alert-error">
+                                <span class="alert-icon">✕</span>
+                                {{ securityError }}
+                            </div>
+
+                            <div class="form-group">
+                                <label>Current Password</label>
+                                <div class="password-field">
+                                    <input
+                                        v-model="passwordForm.current_password"
+                                        :type="showCurrentPassword ? 'text' : 'password'"
+                                        placeholder="Enter current password"
+                                        class="form-input"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="password-toggle"
+                                        @click="showCurrentPassword = !showCurrentPassword"
+                                    >
+                                        {{ showCurrentPassword ? '👁️' : '👁️‍🗨️' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>New Password</label>
+                                <div class="password-field">
+                                    <input
+                                        v-model="passwordForm.new_password"
+                                        :type="showNewPassword ? 'text' : 'password'"
+                                        placeholder="Enter new password"
+                                        class="form-input"
+                                        @input="updatePasswordStrength"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="password-toggle"
+                                        @click="showNewPassword = !showNewPassword"
+                                    >
+                                        {{ showNewPassword ? '👁️' : '👁️‍🗨️' }}
+                                    </button>
+                                </div>
+                                <!-- Password Strength Meter -->
+                                <div class="password-strength">
+                                    <div class="strength-bar">
+                                        <div
+                                            class="strength-fill"
+                                            :class="`strength-${passwordStrength}`"
+                                            :style="{ width: passwordStrengthPercent + '%' }"
+                                        ></div>
+                                    </div>
+                                    <p class="strength-text">{{ passwordStrengthLabel }}</p>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Confirm New Password</label>
+                                <div class="password-field">
+                                    <input
+                                        v-model="passwordForm.confirm_password"
+                                        :type="showConfirmPassword ? 'text' : 'password'"
+                                        placeholder="Confirm new password"
+                                        class="form-input"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="password-toggle"
+                                        @click="showConfirmPassword = !showConfirmPassword"
+                                    >
+                                        {{ showConfirmPassword ? '👁️' : '👁️‍🗨️' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" :disabled="isChangingPassword">
+                                {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Favorites Tab -->
+                    <div v-show="profileTab === 'favorites'" class="tab-content">
+                        <h3>Your Favorite Animals</h3>
+                        <div v-if="favoriteAnimals.length === 0" class="empty-state">
+                            <p>❤️ No favorites yet. Add some from the gallery!</p>
+                        </div>
+                        <div v-else class="favorites-grid">
+                            <div v-for="animal in favoriteAnimals" :key="animal.id" class="favorite-card">
+                                <div class="favorite-image" :class="animal.class"></div>
+                                <h4>{{ animal.name }}</h4>
+                                <button
+                                    @click="toggleFavorite(animal.id)"
+                                    class="btn btn-small btn-danger"
+                                >
+                                    ✕ Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wildlife Management Page -->
+            <div v-show="currentPage === 'wildlife-manage'" class="wildlife-manage-wrapper">
+                <div class="manage-header">
+                    <button @click="currentPage = 'dashboard'" class="btn btn-secondary">← Back to Dashboard</button>
+                    <h1>🦁 Wildlife Animal Management</h1>
+                    <p>Create, Read, Update, and Delete wildlife animals</p>
+                </div>
+
+                <div class="manage-container">
+                    <!-- Navigation Tabs -->
+                    <div class="manage-tabs">
+                        <button
+                            @click="profileTab = 'create'"
+                            :class="{ 'active': profileTab === 'create' }"
+                            class="tab-btn"
+                        >
+                            ➕ Create New
+                        </button>
+                        <button
+                            @click="profileTab = 'list'"
+                            :class="{ 'active': profileTab === 'list' }"
+                            class="tab-btn"
+                        >
+                            📋 View All
+                        </button>
+                        <button
+                            @click="profileTab = 'edit'"
+                            :class="{ 'active': profileTab === 'edit' }"
+                            class="tab-btn"
+                        >
+                            ✏️ Edit
+                        </button>
+                    </div>
+
+                    <!-- CREATE TAB: Add New Animal -->
+                    <div v-show="profileTab === 'create'" class="tab-content-full">
+                        <h2>Create New Wildlife Animal</h2>
+                        <div class="form-section">
+                            <form @submit.prevent="handleCreateAnimal" class="manage-form">
+                                <div class="form-group">
+                                    <label>Animal Name *</label>
+                                    <input
+                                        v-model="newAnimal.name"
+                                        type="text"
+                                        placeholder="e.g., Red Panda"
+                                        class="form-input"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Description *</label>
+                                    <textarea
+                                        v-model="newAnimal.description"
+                                        placeholder="Describe this animal..."
+                                        class="form-input form-textarea"
+                                        rows="3"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Category *</label>
+                                        <select v-model="newAnimal.category" class="form-input">
+                                            <option value="">Select Category</option>
+                                            <option value="Big Cats">Big Cats</option>
+                                            <option value="Birds">Birds</option>
+                                            <option value="Mammals">Mammals</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Image URL (Optional)</label>
+                                        <input
+                                            v-model="newAnimal.image_url"
+                                            type="text"
+                                            placeholder="https://..."
+                                            class="form-input"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Fun Facts (One per line) *</label>
+                                    <textarea
+                                        v-model="newAnimal.facts_text"
+                                        placeholder="Fact 1&#10;Fact 2&#10;Fact 3..."
+                                        class="form-input form-textarea"
+                                        rows="4"
+                                    ></textarea>
+                                    <small>Enter multiple facts, each on a new line</small>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-large">
+                                    ➕ Create Animal
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- READ TAB: View All Animals -->
+                    <div v-show="profileTab === 'list'" class="tab-content-full">
+                        <h2>All Wildlife Animals</h2>
+                        <div class="list-controls">
+                            <input
+                                v-model="searchQuery"
+                                type="text"
+                                placeholder="🔍 Search animals..."
+                                class="form-input"
+                            />
+                        </div>
+
+                        <div v-if="filteredAnimals.length === 0" class="empty-state">
+                            <p>No animals found. Create one to get started!</p>
+                        </div>
+
+                        <div v-else class="animals-table">
+                            <div class="table-header">
+                                <div class="col-name">Name</div>
+                                <div class="col-category">Category</div>
+                                <div class="col-facts">Facts</div>
+                                <div class="col-actions">Actions</div>
+                            </div>
+
+                            <div v-for="animal in filteredAnimals" :key="animal.id || animal._id" class="table-row">
+                                <div class="col-name">
+                                    <strong>{{ animal.name }}</strong>
+                                    <small>{{ animal.description }}</small>
+                                </div>
+                                <div class="col-category">
+                                    <span class="category-badge">{{ animal.category }}</span>
+                                </div>
+                                <div class="col-facts">
+                                    <span class="fact-count">{{ animal.facts?.length || 0 }} facts</span>
+                                </div>
+                                <div class="col-actions">
+                                    <button
+                                        @click="selectAnimalForEdit(animal)"
+                                        class="btn btn-small btn-primary"
+                                    >
+                                        ✏️ Edit
+                                    </button>
+                                    <button
+                                        @click="deleteAnimal(animal.id || animal._id)"
+                                        class="btn btn-small btn-danger"
+                                    >
+                                        🗑️ Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- UPDATE TAB: Edit Animal -->
+                    <div v-show="profileTab === 'edit'" class="tab-content-full">
+                        <h2>Edit Wildlife Animal</h2>
+                        <div v-if="!selectedForEdit" class="empty-state">
+                            <p>Select an animal from the View All tab to edit it</p>
+                        </div>
+
+                        <div v-else class="form-section">
+                            <form @submit.prevent="handleUpdateAnimal" class="manage-form">
+                                <div class="form-info">
+                                    <p>Editing: <strong>{{ selectedForEdit.name }}</strong></p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Animal Name *</label>
+                                    <input
+                                        v-model="selectedForEdit.name"
+                                        type="text"
+                                        class="form-input"
+                                    />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Description *</label>
+                                    <textarea
+                                        v-model="selectedForEdit.description"
+                                        class="form-input form-textarea"
+                                        rows="3"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Category *</label>
+                                        <select v-model="selectedForEdit.category" class="form-input">
+                                            <option value="Big Cats">Big Cats</option>
+                                            <option value="Birds">Birds</option>
+                                            <option value="Mammals">Mammals</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Image URL (Optional)</label>
+                                        <input
+                                            v-model="selectedForEdit.image_url"
+                                            type="text"
+                                            class="form-input"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Fun Facts (One per line) *</label>
+                                    <textarea
+                                        v-model="editFactsText"
+                                        class="form-input form-textarea"
+                                        rows="4"
+                                    ></textarea>
+                                </div>
+
+                                <div class="button-group">
+                                    <button type="submit" class="btn btn-primary">
+                                        ✓ Save Changes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="selectedForEdit = null"
+                                        class="btn btn-secondary"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Form -->
+            <div v-show="currentPage === 'login'" class="auth-wrapper">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="logo-large">🦁</div>
+                        <h1>Welcome Back</h1>
+                        <p>Sign in to your account</p>
+                    </div>
+
+                    <form @submit.prevent="handleLogin" class="auth-form">
+                        <div v-if="loginError" class="alert alert-error">
+                            <span class="alert-icon">✕</span>
+                            {{ loginError }}
+                        </div>
+
+                        <div v-if="loginSuccess" class="alert alert-success">
+                            <span class="alert-icon">✓</span>
+                            {{ loginSuccess }}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="login-username">Username or Email</label>
+                            <input
+                                id="login-username"
+                                v-model="loginForm.username"
+                                type="text"
+                                placeholder="Enter username or email"
+                                :class="{
+                                    'input-error': loginFormErrors.username,
+                                    'input-valid': loginForm.username.trim() && !loginFormErrors.username
+                                }"
+                                @blur="validateLoginField('username')"
+                                @input="validateLoginField('username')"
+                                class="form-input"
+                            />
+                            <span v-if="loginFormErrors.username" class="error-message">
+                                ✕ {{ loginFormErrors.username }}
+                            </span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="login-password">Password</label>
+                            <div class="password-field">
+                                <input
+                                    id="login-password"
+                                    v-model="loginForm.password"
+                                    :type="showLoginPassword ? 'text' : 'password'"
+                                    placeholder="Enter your password"
+                                    :class="{
+                                        'input-error': loginFormErrors.password,
+                                        'input-valid': loginForm.password && !loginFormErrors.password
+                                    }"
+                                    @blur="validateLoginField('password')"
+                                    @input="validateLoginField('password')"
+                                    class="form-input"
+                                />
+                                <button
+                                    type="button"
+                                    class="password-toggle"
+                                    @click="showLoginPassword = !showLoginPassword"
+                                >
+                                    {{ showLoginPassword ? '👁️' : '👁️‍🗨️' }}
+                                </button>
+                            </div>
+                            <span v-if="loginFormErrors.password" class="error-message">
+                                ✕ {{ loginFormErrors.password }}
+                            </span>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-large"
+                            :disabled="isLoggingIn || !isLoginFormValid"
+                        >
+                            {{ isLoggingIn ? 'Signing in...' : 'Sign In' }}
+                        </button>
+                    </form>
+
+                    <div class="auth-footer">
+                        <p>Don't have an account?
+                            <a href="#" @click.prevent="switchPage('signup')" class="link">Sign Up</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signup Form -->
+            <div v-show="currentPage === 'signup'" class="auth-wrapper">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="logo-large">🦁</div>
+                        <h1>Create Account</h1>
+                        <p>Join us today</p>
+                    </div>
+
+                    <form @submit.prevent="handleSignup" class="auth-form">
+                        <div v-if="signupError" class="alert alert-error">
+                            <span class="alert-icon">✕</span>
+                            {{ signupError }}
+                        </div>
+
+                        <div v-if="signupSuccess" class="alert alert-success">
+                            <span class="alert-icon">✓</span>
+                            {{ signupSuccess }}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="signup-username">Username</label>
+                            <div class="input-with-check">
+                                <input
+                                    id="signup-username"
+                                    v-model="signupForm.username"
+                                    type="text"
+                                    placeholder="Choose username (3+ chars)"
+                                    :class="{
+                                        'input-error': signupFormErrors.username,
+                                        'input-valid': signupForm.username && !signupFormErrors.username
+                                    }"
+                                    @blur="validateSignupField('username')"
+                                    @input="validateSignupField('username')"
+                                    class="form-input"
+                                />
+                                <span v-if="signupForm.username && !signupFormErrors.username && !checkingUsername" class="check-mark">✓</span>
+                                <span v-if="checkingUsername" class="checking">🔄</span>
+                            </div>
+                            <span v-if="signupFormErrors.username" class="error-message">
+                                ✕ {{ signupFormErrors.username }}
+                            </span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="signup-email">Email</label>
+                            <div class="input-with-check">
+                                <input
+                                    id="signup-email"
+                                    v-model="signupForm.email"
+                                    type="email"
+                                    placeholder="Enter your email"
+                                    :class="{
+                                        'input-error': signupFormErrors.email,
+                                        'input-valid': signupForm.email && !signupFormErrors.email
+                                    }"
+                                    @blur="validateSignupField('email')"
+                                    @input="validateSignupField('email')"
+                                    class="form-input"
+                                />
+                                <span v-if="signupForm.email && !signupFormErrors.email && !checkingEmail" class="check-mark">✓</span>
+                                <span v-if="checkingEmail" class="checking">🔄</span>
+                            </div>
+                            <span v-if="signupFormErrors.email" class="error-message">
+                                ✕ {{ signupFormErrors.email }}
+                            </span>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="signup-first-name">First Name</label>
+                                <input
+                                    id="signup-first-name"
+                                    v-model="signupForm.first_name"
+                                    type="text"
+                                    placeholder="First name"
+                                    :class="{
+                                        'input-error': signupFormErrors.first_name,
+                                        'input-valid': signupForm.first_name && !signupFormErrors.first_name
+                                    }"
+                                    @blur="validateSignupField('first_name')"
+                                    @input="validateSignupField('first_name')"
+                                    class="form-input"
+                                />
+                                <span v-if="signupFormErrors.first_name" class="error-message">
+                                    ✕ {{ signupFormErrors.first_name }}
+                                </span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="signup-last-name">Last Name</label>
+                                <input
+                                    id="signup-last-name"
+                                    v-model="signupForm.last_name"
+                                    type="text"
+                                    placeholder="Last name"
+                                    :class="{
+                                        'input-error': signupFormErrors.last_name,
+                                        'input-valid': signupForm.last_name && !signupFormErrors.last_name
+                                    }"
+                                    @blur="validateSignupField('last_name')"
+                                    @input="validateSignupField('last_name')"
+                                    class="form-input"
+                                />
+                                <span v-if="signupFormErrors.last_name" class="error-message">
+                                    ✕ {{ signupFormErrors.last_name }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="signup-password">Password</label>
+                            <div class="password-field">
+                                <input
+                                    id="signup-password"
+                                    v-model="signupForm.password"
+                                    :type="showSignupPassword ? 'text' : 'password'"
+                                    placeholder="Min 6 chars, 1 uppercase, 1 number"
+                                    :class="{
+                                        'input-error': signupFormErrors.password,
+                                        'input-valid': signupForm.password && !signupFormErrors.password
+                                    }"
+                                    @blur="validateSignupField('password')"
+                                    @input="validateSignupField('password')"
+                                    class="form-input"
+                                />
+                                <button
+                                    type="button"
+                                    class="password-toggle"
+                                    @click="showSignupPassword = !showSignupPassword"
+                                >
+                                    {{ showSignupPassword ? '👁️' : '👁️‍🗨️' }}
+                                </button>
+                            </div>
+                            <div class="password-strength" v-if="signupForm.password">
+                                <div class="strength-bar">
+                                    <div
+                                        class="strength-fill"
+                                        :class="`strength-${getSignupPasswordStrength()}`"
+                                        :style="{ width: getSignupPasswordStrengthPercent() + '%' }"
+                                    ></div>
+                                </div>
+                                <p class="strength-text">{{ getSignupPasswordStrengthLabel() }}</p>
+                            </div>
+                            <span v-if="signupFormErrors.password" class="error-message">
+                                ✕ {{ signupFormErrors.password }}
+                            </span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="signup-confirm">Confirm Password</label>
+                            <div class="password-field">
+                                <input
+                                    id="signup-confirm"
+                                    v-model="signupForm.password_confirm"
+                                    :type="showSignupConfirm ? 'text' : 'password'"
+                                    placeholder="Confirm password"
+                                    :class="{
+                                        'input-error': signupFormErrors.password_confirm,
+                                        'input-valid': signupForm.password_confirm && !signupFormErrors.password_confirm
+                                    }"
+                                    @blur="validateSignupField('password_confirm')"
+                                    @input="validateSignupField('password_confirm')"
+                                    class="form-input"
+                                />
+                                <button
+                                    type="button"
+                                    class="password-toggle"
+                                    @click="showSignupConfirm = !showSignupConfirm"
+                                >
+                                    {{ showSignupConfirm ? '👁️' : '👁️‍🗨️' }}
+                                </button>
+                            </div>
+                            <span v-if="signupFormErrors.password_confirm" class="error-message">
+                                ✕ {{ signupFormErrors.password_confirm }}
+                            </span>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-large"
+                            :disabled="isSigningUp || !isSignupFormValid"
+                        >
+                            {{ isSigningUp ? 'Creating...' : 'Create Account' }}
+                        </button>
+                    </form>
+
+                    <div class="auth-footer">
+                        <p>Already have an account?
+                            <a href="#" @click.prevent="switchPage('login')" class="link">Sign In</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
